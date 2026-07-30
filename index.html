@@ -638,7 +638,7 @@ table.dt tfoot td:nth-child(7) { text-align: right; font-variant-numeric: tabula
     <div class="num-grupos" id="num-grupos">
       <table>
         <thead><tr>
-          <th>N° Proforma</th><th>Proveedor</th><th>Destino</th><th>Origen</th><th>Tipo</th><th>Filas</th>
+          <th>N° Proforma</th><th>Proveedor</th><th>Destino</th><th>Origen</th><th>Tipo</th><th>Filas</th><th>Guías de Despacho</th>
         </tr></thead>
         <tbody id="num-grupos-body"></tbody>
       </table>
@@ -883,6 +883,7 @@ async function registrarAsignacionFB(grupos, proximo) {
       origen: g.origen || '',
       rol: str(g.rows[0]['ROL ORIGEN']),
       predio: str(g.rows[0]['PREDIO 2']),
+      guias: g.guias || guiasDeFilas(g.rows),
       mes: mes,
       fecha: hoy,
       neto: Math.round(g.rows.reduce((a, r) => a + num_(r['NETO']), 0)),
@@ -1223,6 +1224,7 @@ function leerArchivo(file) {
         hdrs.forEach((h, j) => obj[h] = row[j] ?? '');
         rawRows.push(obj);
       }
+      recalcularGuiasExistentes();
       poblarControles();
       sincronizarExcelFB();
 
@@ -1482,14 +1484,8 @@ function generar() {
     rows.forEach(r => {
       // Excluir filas CCE de la proforma de madera (cualquier proveedor)
       // Se detectan por: UM='CCE' O PRODUCTO contiene 'CCE'
-      const um = str(r['UM']).trim();
-      const producto = str(r['PRODUCTO']).trim();
-      const esCCEporColumnaUM = (um === 'CCE');
-      const esCCEporProducto = (producto.indexOf('CCE') >= 0);
-      
-      // DEBUG: mostrar qué filas se excluyen
-      if (esCCEporColumnaUM || esCCEporProducto) {
-        console.log('Excluyendo fila CCE:', { um, producto, prov: str(r['PROVEEDOR']) });
+      if (esFilaCCE(r)) {
+        console.log('Excluyendo fila CCE:', { um: str(r['UM']), producto: str(r['PRODUCTO']), prov: str(r['PROVEEDOR']) });
         return;  // No incluir CCE en proforma de madera
       }
       
@@ -1522,7 +1518,7 @@ function generar() {
       num: Number(num), proveedor: str(r0['PROVEEDOR']), tipo: str(r0['TIPO PROFORMA']),
       razon: str(r0['RAZON SOCIAL']), rut: str(r0['RUT']), dir: str(r0['DIRECCION']),
       comuna: str(r0['COMUNA']), tel: str(r0['TELEFONO']), giro: str(r0['GIRO']),
-      email: str(r0['E-MAIL']), guias: ordenarGuias(str(r0['GUIAS ASOC'])),
+      email: str(r0['E-MAIL']), guias: guiasDeFilas(rows),
       lineas, cu1: cus.length === 1 ? cus[0] : null,
       neto:  lineas.reduce((a, l) => a + l.neto, 0),
       iva:   lineas.reduce((a, l) => a + l.iva, 0),
@@ -2074,6 +2070,38 @@ function toggleBono() {
     desc.textContent = 'No hay registros marcados como CIERRE. Activa el bono para emitir proformas de cierre con el Bono Especial por Distancia (filas con BONO DISTANCIA > 0).';
   }
 }
+// ¿Es una fila CCE (bono acuerdo comercial)? Se excluye de la proforma de madera.
+function esFilaCCE(r) {
+  const um = str(r['UM']).trim();
+  const producto = str(r['PRODUCTO']).trim();
+  return um === 'CCE' || producto.indexOf('CCE') >= 0;
+}
+
+// Guías de despacho de referencia: se construyen desde las filas que realmente
+// componen la proforma (columna NÚMERO = N° de guía de despacho), sin duplicados
+// y ordenadas. Criterio idéntico al de agrupación de la proforma:
+// Proveedor + Destino + Rol Origen + Tipo. Si el Excel no trae NÚMERO, se
+// usa como respaldo la columna GUIAS ASOC.
+function guiasDeFilas(rows) {
+  const set = new Set();
+  rows.forEach(r => {
+    if (esFilaCCE(r)) return;                       // las CCE no aportan guía
+    if (num_(r['COSTO UNITARIO']) < 0) return;      // ajustes de precio tampoco
+    const g = str(r['NÚMERO'] !== undefined ? r['NÚMERO'] : r['NUMERO']);
+    if (g && g !== '0') set.add(g);
+  });
+  if (set.size === 0) {
+    // Respaldo: lista precargada en el Excel
+    rows.forEach(r => {
+      String(str(r['GUIAS ASOC'])).split(/[,;\/\s]+/).forEach(p => {
+        const v = p.trim();
+        if (v && v !== '0') set.add(v);
+      });
+    });
+  }
+  return ordenarGuias([...set].join(', '));
+}
+
 function ordenarGuias(s) {
   if (!s) return '';
   const partes = String(s).split(/[,;\/\s]+/).map(p => p.trim()).filter(Boolean);
@@ -2117,6 +2145,29 @@ function calcularGrupos(numInicial) {
     g.numero = contador++;
     return g;
   });
+}
+
+// Reconstruye GUIAS ASOC de TODAS las proformas ya numeradas, agrupando por
+// número de proforma (que a su vez respeta Proveedor + Destino + Rol + Tipo).
+function recalcularGuiasExistentes() {
+  const porNum = {};
+  rawRows.forEach(r => {
+    const n = str(r['PROFORMA']);
+    if (!n) return;
+    if (!porNum[n]) porNum[n] = [];
+    porNum[n].push(r);
+  });
+  let cambios = 0;
+  Object.keys(porNum).forEach(n => {
+    const guias = guiasDeFilas(porNum[n]);
+    if (!guias) return;
+    porNum[n].forEach(r => {
+      if (str(r['GUIAS ASOC']) !== guias) cambios++;
+      r['GUIAS ASOC'] = guias;
+    });
+  });
+  if (cambios) console.log('GUIAS ASOC recalculadas en ' + cambios + ' fila(s).');
+  return cambios;
 }
 
 function actualizarPreview() {
@@ -2163,8 +2214,11 @@ async function asignarNumeros() {
   }
 
   // Asignar número solo a las filas que NO tenían número (calcularGrupos ya las filtró)
+  // y reconstruir la lista de guías de despacho con el mismo criterio de agrupación.
   gruposAsignados.forEach(g => {
-    g.rows.forEach(r => { r['PROFORMA'] = g.numero; });
+    const guias = guiasDeFilas(g.rows);
+    g.guias = guias;
+    g.rows.forEach(r => { r['PROFORMA'] = g.numero; r['GUIAS ASOC'] = guias; });
   });
 
   // Mostrar tabla de grupos
@@ -2177,6 +2231,7 @@ async function asignarNumeros() {
       <td>${g.origen}</td>
       <td>${g.tipo}</td>
       <td>${g.rows.length}</td>
+      <td style="font-size:.74rem">${g.guias || '—'}</td>
     </tr>`).join('');
   document.getElementById('num-grupos').classList.add('on');
   document.getElementById('btn-dl-excel').classList.add('on');
@@ -2256,17 +2311,21 @@ function descargarExcel() {
   const hdrIdx = originalAoa.findIndex(row => row.some(c => String(c).trim().toUpperCase() === 'PROFORMA'));
   const hdrs = originalAoa[hdrIdx].map(h => String(h).trim());
   const pfCol = hdrs.indexOf('PROFORMA');
+  const guCol = hdrs.indexOf('GUIAS ASOC');
 
   // Clonar AOA
   const aoaOut = originalAoa.map(r => [...r]);
 
-  // Reemplazar valores en columna PROFORMA para filas de datos
+  // Reemplazar valores en columnas PROFORMA y GUIAS ASOC para filas de datos
   let rawIdx = 0;
   for (let i = hdrIdx + 1; i < aoaOut.length; i++) {
     const row = aoaOut[i];
     if (row.every(c => c === '' || c === null || c === undefined)) continue;
     if (rawIdx < rawRows.length && pfCol >= 0) {
       aoaOut[i][pfCol] = rawRows[rawIdx]['PROFORMA'] || '';
+    }
+    if (rawIdx < rawRows.length && guCol >= 0) {
+      aoaOut[i][guCol] = rawRows[rawIdx]['GUIAS ASOC'] || '';
     }
     rawIdx++;
   }
@@ -2278,7 +2337,7 @@ function descargarExcel() {
   // Nombre del archivo: original + _procesado
   const nombreBase = (document.getElementById('fname').textContent || 'BASE_PROF_MADERAS').replace(/\.xlsx?$/i, '');
   XLSX.writeFile(wb, nombreBase + '_NUMERADO.xlsx');
-  status('✓ Excel descargado con números de proforma asignados.', 'ok');
+  status('✓ Excel descargado con números de proforma y guías de despacho actualizados.', 'ok');
 }
 
 // ── Guardar PDF individual ──
