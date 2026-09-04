@@ -567,6 +567,39 @@ table.dt tfoot td:nth-child(7) { text-align: right; font-variant-numeric: tabula
 .hist-filtros .btn-limpiar:hover { background:#777; }
 .hist-resumen { margin-top:12px; background:var(--gs); border-radius:7px; padding:10px 16px; font-size:.82rem; color:var(--gd); font-weight:600; display:flex; gap:26px; flex-wrap:wrap; }
 .hist-resumen .pend-alert { color:var(--red); }
+
+/* ═══ SELECCIÓN DE TIPOS + DUPLICADOS ═══ */
+.tipo-card { background:var(--wh); border:1.5px solid var(--bo); border-left:5px solid var(--gl); border-radius:10px; padding:16px 22px; margin-bottom:14px; display:none; }
+.tipo-card.on { display:block; }
+.tipo-card-title { font-family:'Barlow Condensed',sans-serif; font-size:.95rem; font-weight:700; color:var(--gd); text-transform:uppercase; letter-spacing:.4px; margin-bottom:4px; display:flex; align-items:center; gap:8px; }
+.tipo-card-sub { font-size:.76rem; color:var(--mu); margin-bottom:12px; line-height:1.5; }
+.tipo-lista { display:flex; gap:10px; flex-wrap:wrap; }
+.tipo-chk { display:flex; align-items:center; gap:9px; border:1.5px solid var(--bo); border-radius:8px; padding:9px 15px; cursor:pointer; background:var(--gs); transition:border-color .15s, background .15s; }
+.tipo-chk:hover { border-color:var(--gl); }
+.tipo-chk.on { border-color:var(--gm); background:#f2f9f3; }
+.tipo-chk input { width:16px; height:16px; accent-color:var(--gm); cursor:pointer; }
+.tipo-chk-nom { font-family:'Barlow Condensed',sans-serif; font-size:1rem; font-weight:700; color:var(--gd); letter-spacing:.3px; }
+.tipo-chk-det { font-size:.7rem; color:var(--mu); }
+.tipo-chk-det b { color:var(--gm); }
+.tipo-acciones { margin-top:10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.tipo-acciones button { padding:5px 13px; border:1.5px solid var(--bo); background:#fff; border-radius:20px; font-family:'Barlow',sans-serif; font-size:.72rem; font-weight:700; color:var(--mu); cursor:pointer; }
+.tipo-acciones button:hover { border-color:var(--gm); color:var(--gd); }
+.tipo-aviso { font-size:.75rem; color:var(--gd); font-weight:600; }
+
+.dup-box { display:none; margin-top:12px; border:1.5px solid #f0c9c3; border-radius:8px; overflow:hidden; }
+.dup-box.on { display:block; }
+.dup-hdr { background:#fdecea; color:var(--red); padding:9px 15px; font-size:.8rem; font-weight:700; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+.dup-hdr button { padding:4px 12px; border:1.5px solid var(--red); background:#fff; color:var(--red); border-radius:20px; font-size:.7rem; font-weight:700; cursor:pointer; font-family:'Barlow',sans-serif; }
+.dup-hdr button:hover { background:var(--red); color:#fff; }
+.dup-tbl { width:100%; border-collapse:collapse; font-size:.76rem; background:#fff; }
+.dup-tbl th { background:#f7f2f1; color:#7a3a33; padding:6px 12px; text-align:left; font-size:.68rem; text-transform:uppercase; letter-spacing:.4px; }
+.dup-tbl td { padding:6px 12px; border-bottom:1px solid #f2eae9; vertical-align:top; }
+.dup-tbl .badge-x { background:var(--red); color:#fff; border-radius:4px; padding:1px 7px; font-size:.68rem; font-weight:700; white-space:nowrap; }
+.dup-tbl .badge-w { background:#e8a33d; color:#fff; border-radius:4px; padding:1px 7px; font-size:.68rem; font-weight:700; white-space:nowrap; }
+.dup-tbl .btn-forzar { padding:4px 10px; background:#888; color:#fff; border:none; border-radius:5px; font-size:.68rem; font-weight:700; cursor:pointer; white-space:nowrap; }
+.dup-tbl .btn-forzar:hover { background:var(--gd); }
+.dup-tbl .btn-forzar.on { background:var(--gm); }
+.dup-guias { color:var(--mu); font-size:.72rem; }
 </style>
 </head>
 <body>
@@ -615,6 +648,23 @@ table.dt tfoot td:nth-child(7) { text-align: right; font-variant-numeric: tabula
   </div>
   <div class="status" id="st"></div>
 
+  <!-- TARJETA SELECCIÓN DE TIPOS DE PROFORMA -->
+  <div class="tipo-card" id="tipo-card">
+    <div class="tipo-card-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+      ¿Qué tipos de proforma vas a emitir?
+    </div>
+    <div class="tipo-card-sub" id="tipo-card-sub">
+      Selecciona solo los tipos que corresponden a esta emisión. Los tipos no seleccionados se ignoran por completo: no se numeran ni se generan, y sus filas quedan intactas para procesarlas después.
+    </div>
+    <div class="tipo-lista" id="tipo-lista"></div>
+    <div class="tipo-acciones">
+      <button onclick="marcarTiposTodos(true)">Marcar todos</button>
+      <button onclick="marcarTiposTodos(false)">Desmarcar todos</button>
+      <span class="tipo-aviso" id="tipo-aviso"></span>
+    </div>
+  </div>
+
   <!-- TARJETA NUMERACIÓN PROFORMAS -->
   <div class="num-card" id="num-card">
     <div class="num-card-title">
@@ -635,6 +685,17 @@ table.dt tfoot td:nth-child(7) { text-align: right; font-variant-numeric: tabula
         Descargar Excel Procesado
       </button>
     </div>
+    <div class="dup-box" id="dup-box">
+      <div class="dup-hdr">
+        <span id="dup-hdr-txt">Proformas ya registradas</span>
+        <button onclick="forzarTodosDuplicados()" id="dup-btn-todos">Incluir todas de todos modos</button>
+      </div>
+      <table class="dup-tbl">
+        <thead><tr><th>Estado</th><th>Proveedor</th><th>Tipo</th><th>Destino</th><th>Guías</th><th>Ya registrada como</th><th></th></tr></thead>
+        <tbody id="dup-body"></tbody>
+      </table>
+    </div>
+
     <div class="num-grupos" id="num-grupos">
       <table>
         <thead><tr>
@@ -762,6 +823,8 @@ const LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAOEAAADhCAIAAACx0UUt
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 let rawRows = [], pfs = [], pfActual = null, gruposAsignados = [], originalHeaders = [], originalAoa = [];
 let bonoActivado = false;
+let tiposSeleccionados = null;   // Set de tipos a emitir (null = aún no inicializado)
+let gruposForzados = new Set();  // claves de grupos duplicados que el usuario decidió incluir igual
 
 /* ═══════════════════════════════════════════
    FIREBASE — BASE DE DATOS EN LA NUBE
@@ -819,6 +882,7 @@ async function cargarEstadoFB(alAbrir) {
       const inp = document.getElementById('num-inicial');
       if (inp && !rawRows.length) inp.value = correlativoFBCache;
     }
+    if (rawRows.length && document.getElementById('num-card').classList.contains('on')) actualizarPreview();
     const pend = facturasPendientes();
     if (alAbrir && pend.length > 0) abrirFacturas(true);
   } catch (e) {
@@ -1225,6 +1289,9 @@ function leerArchivo(file) {
         rawRows.push(obj);
       }
       recalcularGuiasExistentes();
+      tiposSeleccionados = null;    // se reinicia con los tipos del nuevo archivo
+      gruposForzados = new Set();
+      renderTiposCard();
       poblarControles();
       sincronizarExcelFB();
 
@@ -1269,7 +1336,7 @@ function poblarControles() {
   document.getElementById('mes').value = MESES[hoy.getMonth()].toUpperCase() + ' ' + hoy.getFullYear();
 
   // ── Tipos únicos desde la columna TIPO PROFORMA del Excel ──
-  const tipos = [...new Set(rawRows.map(r => str(r['TIPO PROFORMA'])).filter(Boolean))].sort();
+  const tipos = [...new Set(rawRows.map(r => str(r['TIPO PROFORMA'])).filter(Boolean))].sort().filter(tipoActivo);
   const tipoSel = document.getElementById('tipo');
   tipoSel.innerHTML = '<option value="TODAS">Todas</option>';
   tipos.forEach(t => {
@@ -1377,6 +1444,7 @@ function generar() {
   }
 
   let filas = rawRows.filter(r => {
+    if (!filaTipoActivo(r)) return false;   // tipo no seleccionado en la tarjeta superior
     if (tipo !== 'TODAS' && str(r['TIPO PROFORMA']).toUpperCase() !== tipo.toUpperCase()) return false;
     if (pfFilt !== 'TODAS' && String(r['PROFORMA']) !== String(pfFilt)) return false;
     return true;
@@ -1689,6 +1757,27 @@ function generar() {
   }
 
   pfs.sort((a, b) => a.num - b.num);
+
+  // ── Validación final: ¿alguna proforma ya está registrada con OTRO número? ──
+  const yaRegistradas = [];
+  pfs.forEach(pf => {
+    if (pf.soloBono || !pf.guias) return;
+    const d = buscarDuplicadoFB(pf.proveedor, pf.tipo, '', pf.guias);
+    if (d && d.estado === 'exacto' && Number(d.num) !== Number(pf.num)) {
+      yaRegistradas.push('· ' + pf.proveedor + ' — ' + pf.tipo + ': se emitiría como N° ' + pf.num + ', pero ya está registrada como N° ' + d.num);
+    }
+  });
+  if (yaRegistradas.length) {
+    const ok = confirm('⚠ ATENCIÓN: ' + yaRegistradas.length + ' proforma(s) ya están registradas con otro número y las mismas guías:\n\n' +
+      yaRegistradas.slice(0, 10).join('\n') + (yaRegistradas.length > 10 ? '\n… y ' + (yaRegistradas.length - 10) + ' más.' : '') +
+      '\n\n¿Generarlas de todos modos?');
+    if (!ok) {
+      pfs = []; pfActual = null;
+      document.getElementById('pfsec').classList.remove('on');
+      status('Generación cancelada: hay proformas ya registradas. Revisa el historial antes de continuar.', 'err');
+      return;
+    }
+  }
 
   mostrar();
   sincronizarPfsFB();
@@ -2121,6 +2210,152 @@ function fmtFecha(d) { return String(d.getDate()).padStart(2, '0') + '-' + Strin
 function status(msg, tipo) { const el = document.getElementById('st'); el.className = 'status ' + tipo; el.textContent = msg; }
 
 // ── Numeración automática ──
+
+/* ═══════════════════════════════════════════
+   SELECCIÓN DE TIPOS DE PROFORMA
+   Los tipos no seleccionados se ignoran por completo:
+   no se numeran, no se generan y sus filas quedan intactas.
+═══════════════════════════════════════════ */
+function tiposDelArchivo() {
+  return [...new Set(rawRows.map(r => str(r['TIPO PROFORMA'])).filter(Boolean))].sort();
+}
+
+function tipoActivo(t) {
+  if (!tiposSeleccionados) return true;
+  return tiposSeleccionados.has(str(t));
+}
+
+function filaTipoActivo(r) { return tipoActivo(str(r['TIPO PROFORMA'])); }
+
+function renderTiposCard() {
+  const tipos = tiposDelArchivo();
+  const card = document.getElementById('tipo-card');
+  if (!tipos.length) { card.classList.remove('on'); return; }
+  if (!tiposSeleccionados) tiposSeleccionados = new Set(tipos);
+
+  const cont = document.getElementById('tipo-lista');
+  cont.innerHTML = tipos.map(t => {
+    const filas = rawRows.filter(r => str(r['TIPO PROFORMA']) === t);
+    const sinNum = filas.filter(r => !str(r['PROFORMA'])).length;
+    const on = tiposSeleccionados.has(t);
+    const id = 'tipochk-' + t.replace(/[^a-zA-Z0-9]/g, '_');
+    return '<label class="tipo-chk' + (on ? ' on' : '') + '" id="lbl-' + id + '">' +
+      '<input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="toggleTipo(' + JSON.stringify(t).replace(/"/g, '&quot;') + ', this.checked)"/>' +
+      '<span><span class="tipo-chk-nom">' + t + '</span><br>' +
+      '<span class="tipo-chk-det">' + filas.length + ' fila(s) · <b>' + sinNum + ' sin numerar</b></span></span></label>';
+  }).join('');
+
+  const aviso = document.getElementById('tipo-aviso');
+  if (tiposSeleccionados.size === 0) {
+    aviso.innerHTML = '<span style="color:var(--red)">⚠ No hay ningún tipo seleccionado: no se numerará ni generará nada.</span>';
+  } else if (tiposSeleccionados.size < tipos.length) {
+    const fuera = tipos.filter(t => !tiposSeleccionados.has(t));
+    aviso.innerHTML = '↷ Se ignoran: <b>' + fuera.join(', ') + '</b>';
+  } else if (tipos.length > 1) {
+    aviso.innerHTML = '✓ Se emitirán los ' + tipos.length + ' tipos del archivo.';
+  } else {
+    aviso.innerHTML = '';
+  }
+  card.classList.add('on');
+}
+
+function toggleTipo(t, on) {
+  if (!tiposSeleccionados) tiposSeleccionados = new Set(tiposDelArchivo());
+  if (on) tiposSeleccionados.add(t); else tiposSeleccionados.delete(t);
+  gruposForzados = new Set();
+  renderTiposCard();
+  poblarControles();
+  actualizarPreview();
+}
+
+function marcarTiposTodos(on) {
+  tiposSeleccionados = on ? new Set(tiposDelArchivo()) : new Set();
+  gruposForzados = new Set();
+  renderTiposCard();
+  poblarControles();
+  actualizarPreview();
+}
+
+/* ═══════════════════════════════════════════
+   VALIDACIÓN DE DUPLICADOS CONTRA FIREBASE
+   Firma de una proforma: PROVEEDOR + TIPO + DESTINO + GUÍAS.
+   · Guías idénticas  → duplicado (se excluye del numerado)
+   · Guías parciales  → advertencia (se numera igual)
+═══════════════════════════════════════════ */
+function normTxt(s) { return String(s || '').trim().toUpperCase().replace(/\s+/g, ' '); }
+
+function setGuias(txt) {
+  return new Set(String(txt || '').split(/[,;\/\s]+/).map(p => p.trim()).filter(p => p && p !== '0'));
+}
+
+// Compara un grupo candidato contra las proformas ya registradas en Firebase.
+// Devuelve null | { estado:'exacto'|'parcial', num, comunes, guiasFB }
+function buscarDuplicadoFB(prov, tipo, destino, guias) {
+  if (!fbOK || !todasProformasFB.length) return null;
+  const gSet = setGuias(guias);
+  if (!gSet.size) return null;
+  let parcial = null;
+  for (const p of todasProformasFB) {
+    if (normTxt(p.proveedor) !== normTxt(prov)) continue;
+    if (normTxt(p.tipo) !== normTxt(tipo)) continue;
+    // El destino solo descarta si ambos registros lo tienen
+    if (destino && p.destino && normTxt(p.destino) !== normTxt(destino)) continue;
+    const fbSet = setGuias(p.guias);
+    if (!fbSet.size) continue;
+    const comunes = [...gSet].filter(x => fbSet.has(x));
+    if (!comunes.length) continue;
+    const identico = comunes.length === gSet.size && fbSet.size === gSet.size;
+    if (identico) return { estado: 'exacto', num: p.num, comunes, guiasFB: [...fbSet].join(', ') };
+    if (!parcial) parcial = { estado: 'parcial', num: p.num, comunes, guiasFB: [...fbSet].join(', ') };
+  }
+  return parcial;
+}
+
+function renderDuplicados(grupos) {
+  const box = document.getElementById('dup-box');
+  const body = document.getElementById('dup-body');
+  const hdr = document.getElementById('dup-hdr-txt');
+  const btnTodos = document.getElementById('dup-btn-todos');
+  const conDup = grupos.filter(g => g.dup);
+  if (!conDup.length) { box.classList.remove('on'); body.innerHTML = ''; return; }
+
+  const nEx = conDup.filter(g => g.dup.estado === 'exacto').length;
+  const nPa = conDup.filter(g => g.dup.estado === 'parcial').length;
+  hdr.textContent = '⚠ ' + (nEx ? nEx + ' proforma(s) ya registrada(s) — excluida(s) del numerado. ' : '') +
+                    (nPa ? nPa + ' con guías parcialmente repetidas (se numeran igual, revisa). ' : '');
+  btnTodos.style.display = nEx ? '' : 'none';
+  const todasForzadas = conDup.filter(g => g.dup.estado === 'exacto').every(g => gruposForzados.has(g.key));
+  btnTodos.textContent = todasForzadas ? '↩ Volver a excluirlas' : 'Incluir todas de todos modos';
+
+  body.innerHTML = conDup.map(g => {
+    const ex = g.dup.estado === 'exacto';
+    const forzado = gruposForzados.has(g.key);
+    return '<tr>' +
+      '<td>' + (ex ? (forzado ? '<span class="badge-w">Incluida a la fuerza</span>' : '<span class="badge-x">Duplicada</span>') : '<span class="badge-w">Revisar</span>') + '</td>' +
+      '<td>' + g.proveedor + '</td>' +
+      '<td>' + g.tipo + '</td>' +
+      '<td>' + (g.destino || '—') + '</td>' +
+      '<td class="dup-guias">' + (g.guias || '—') + '</td>' +
+      '<td>N° <b>' + g.dup.num + '</b><br><span class="dup-guias">' + (ex ? 'mismas guías' : 'comparte: ' + g.dup.comunes.join(', ')) + '</span></td>' +
+      '<td>' + (ex ? '<button class="btn-forzar' + (forzado ? ' on' : '') + '" onclick="forzarGrupo(' + JSON.stringify(g.key).replace(/"/g, '&quot;') + ')">' + (forzado ? '✓ Incluida' : 'Incluir igual') + '</button>' : '') + '</td>' +
+      '</tr>';
+  }).join('');
+  box.classList.add('on');
+}
+
+function forzarGrupo(key) {
+  if (gruposForzados.has(key)) gruposForzados.delete(key); else gruposForzados.add(key);
+  actualizarPreview();
+}
+
+function forzarTodosDuplicados() {
+  const grupos = calcularGrupos(1);
+  const exactos = grupos.filter(g => g.dup && g.dup.estado === 'exacto');
+  const todas = exactos.every(g => gruposForzados.has(g.key));
+  exactos.forEach(g => { if (todas) gruposForzados.delete(g.key); else gruposForzados.add(g.key); });
+  actualizarPreview();
+}
+
 function calcularGrupos(numInicial) {
   // Agrupar por: PROVEEDOR + DESTINO2 + ROL ORIGEN + TIPO PROFORMA
   // SOLO se procesan filas SIN número de proforma asignado.
@@ -2129,22 +2364,30 @@ function calcularGrupos(numInicial) {
   const grupos = {};
   rawRows.forEach(r => {
     const numActual = str(r['PROFORMA']);
-    if (numActual) return;   // ya tiene número asignado en el Excel — preservar
+    if (numActual) return;      // ya tiene número asignado en el Excel — preservar
+    if (!filaTipoActivo(r)) return;   // tipo no seleccionado — se ignora por completo
     const key = [
       str(r['PROVEEDOR']).trim(),
       str(r['DESTINO2']).trim(),
       str(r['ROL ORIGEN']).trim(),
       str(r['TIPO PROFORMA']).trim()
     ].join('||');
-    if (!grupos[key]) grupos[key] = { rows: [], proveedor: str(r['PROVEEDOR']), destino: str(r['DESTINO2']), origen: str(r['PREDIO 2'] || r['ROL ORIGEN']), tipo: str(r['TIPO PROFORMA']) };
+    if (!grupos[key]) grupos[key] = { key: key, rows: [], proveedor: str(r['PROVEEDOR']), destino: str(r['DESTINO2']), origen: str(r['PREDIO 2'] || r['ROL ORIGEN']), tipo: str(r['TIPO PROFORMA']) };
     grupos[key].rows.push(r);
   });
 
-  let contador = numInicial;
-  return Object.values(grupos).map(g => {
-    g.numero = contador++;
-    return g;
+  // Guías del grupo + validación contra las proformas ya registradas en Firebase
+  const lista = Object.values(grupos);
+  lista.forEach(g => {
+    g.guias = guiasDeFilas(g.rows);
+    g.dup = buscarDuplicadoFB(g.proveedor, g.tipo, g.destino, g.guias);
+    // Se excluye del numerado si es duplicado exacto y el usuario no lo forzó
+    g.excluido = !!(g.dup && g.dup.estado === 'exacto' && !gruposForzados.has(g.key));
   });
+
+  let contador = numInicial;
+  lista.forEach(g => { g.numero = g.excluido ? null : contador++; });
+  return lista;
 }
 
 // Reconstruye GUIAS ASOC de TODAS las proformas ya numeradas, agrupando por
@@ -2172,13 +2415,19 @@ function recalcularGuiasExistentes() {
 
 function actualizarPreview() {
   const numInicial = parseInt(document.getElementById('num-inicial').value) || 30001;
-  const grupos = calcularGrupos(numInicial);
+  const todosGrupos = calcularGrupos(numInicial);
+  renderDuplicados(todosGrupos);
+  const grupos = todosGrupos.filter(g => !g.excluido);
+  const nExcl = todosGrupos.length - grupos.length;
   const preview = document.getElementById('num-preview');
   const conNumero = rawRows.filter(r => str(r['PROFORMA'])).length;
-  const sinNumero = rawRows.length - conNumero;
+  const sinNumero = grupos.reduce((a, g) => a + g.rows.length, 0);
+  const ignoradas = rawRows.filter(r => !str(r['PROFORMA']) && !filaTipoActivo(r)).length;
+  const txtIgn = ignoradas ? `<br><span style="color:var(--mu)">↷ ${ignoradas} fila(s) ignorada(s) por tipo no seleccionado</span>` : '';
+  const txtExcl = nExcl ? `<br><span style="color:var(--red);font-weight:600">⚠ ${nExcl} grupo(s) excluido(s) por estar ya registrados</span>` : '';
   if (grupos.length === 0) {
-    preview.innerHTML = `<strong>✓ Todas las filas ya tienen número de proforma asignado.</strong><br>
-      No hay nuevos números que asignar (${conNumero} fila(s) ya numeradas).`;
+    preview.innerHTML = `<strong>${nExcl ? '⚠ No hay números nuevos que asignar.' : '✓ Todas las filas ya tienen número de proforma asignado.'}</strong><br>
+      ${conNumero} fila(s) ya numeradas.${txtExcl}${txtIgn}`;
     return;
   }
   const numFinal = numInicial + grupos.length - 1;
@@ -2187,7 +2436,7 @@ function actualizarPreview() {
     : '';
   preview.innerHTML = `Se asignarán <strong>${grupos.length} número(s) nuevo(s)</strong> a ${sinNumero} fila(s) sin número<br>
     Desde <strong>${numInicial}</strong> hasta <strong>${numFinal}</strong><br>
-    ${conservadosTxt}Criterio: Proveedor + Destino + Origen + Tipo` +
+    ${conservadosTxt}${txtExcl}${txtIgn}<br>Criterio: Proveedor + Destino + Origen + Tipo` +
     (fbOK && correlativoFBCache ? `<br><span style="color:var(--gm);font-weight:600">☁ Correlativo Firebase: próximo N° ${correlativoFBCache}</span>` : '');
 }
 
@@ -2202,10 +2451,17 @@ async function asignarNumeros() {
       }
     } catch (e) { console.warn('No se pudo leer correlativo FB:', e); }
   }
-  gruposAsignados = calcularGrupos(numInicial);
+  const todosGrupos = calcularGrupos(numInicial);
+  renderDuplicados(todosGrupos);
+  const nExcluidos = todosGrupos.filter(g => g.excluido).length;
+  gruposAsignados = todosGrupos.filter(g => !g.excluido);
+
+  if (nExcluidos) {
+    status('⚠ ' + nExcluidos + ' grupo(s) NO se numeraron porque ya están registrados en Firebase con las mismas guías. Revisa el detalle más abajo; puedes incluirlos con "Incluir igual" si corresponde.', 'err');
+  }
 
   if (gruposAsignados.length === 0) {
-    status('✓ Todas las filas ya tienen número de proforma asignado en el Excel. No se asignaron nuevos números.', 'info');
+    if (!nExcluidos) status('✓ Todas las filas ya tienen número de proforma asignado en el Excel. No se asignaron nuevos números.', 'info');
     document.getElementById('num-grupos-body').innerHTML = '';
     document.getElementById('num-grupos').classList.remove('on');
     document.getElementById('btn-dl-excel').classList.add('on');
@@ -2239,7 +2495,8 @@ async function asignarNumeros() {
   // Refrescar selector de proformas
   poblarControles();
   const numFinal = numInicial + gruposAsignados.length - 1;
-  status('✓ ' + gruposAsignados.length + ' proforma(s) numerada(s) desde ' + numInicial + ' hasta ' + numFinal + '. Las filas con número original se conservaron. Ahora puedes generar las proformas o descargar el Excel.', 'ok');
+  const sufijoExcl = nExcluidos ? ' ⚠ ' + nExcluidos + ' grupo(s) quedaron fuera por estar ya registrados.' : '';
+  status('✓ ' + gruposAsignados.length + ' proforma(s) numerada(s) desde ' + numInicial + ' hasta ' + numFinal + '. Las filas con número original se conservaron. Ahora puedes generar las proformas o descargar el Excel.' + sufijoExcl, nExcluidos ? 'info' : 'ok');
   registrarAsignacionFB(gruposAsignados, numFinal + 1);
 }
 
@@ -2249,12 +2506,17 @@ function limpiarDatos() {
   rawRows = []; pfs = []; pfActual = null;
   gruposAsignados = []; originalHeaders = []; originalAoa = [];
   bonoActivado = false;
+  tiposSeleccionados = null; gruposForzados = new Set();
 
   // UI: ocultar todo
   document.getElementById('ctrl').classList.remove('on');
   document.getElementById('cards').classList.remove('on');
   document.getElementById('pfsec').classList.remove('on');
   document.getElementById('num-card').classList.remove('on');
+  document.getElementById('tipo-card').classList.remove('on');
+  document.getElementById('dup-box').classList.remove('on');
+  document.getElementById('tipo-lista').innerHTML = '';
+  document.getElementById('dup-body').innerHTML = '';
   document.getElementById('num-grupos').classList.remove('on');
   document.getElementById('btn-dl-excel').classList.remove('on');
   document.getElementById('btn-reset').classList.remove('on');
