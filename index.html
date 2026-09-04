@@ -200,6 +200,8 @@ main { max-width: 980px; margin: 0 auto; padding: 28px 20px 60px; }
   align-self: flex-end; letter-spacing: .3px; transition: background .2s;
 }
 .btn-gen:hover { background: var(--gd); }
+.btn-gen:disabled, .btn-gen[disabled] { background: #b7bdb8; cursor: not-allowed; opacity: .85; }
+.btn-gen:disabled:hover { background: #b7bdb8; }
 .btn-informe {
   padding: 9px 18px; background: var(--gold); color: #fff; border: none; border-radius: 6px;
   font-family: 'Barlow', sans-serif; font-size: .85rem; font-weight: 700; cursor: pointer;
@@ -764,7 +766,7 @@ table.dt tfoot td:nth-child(7) { text-align: right; font-variant-numeric: tabula
       <label>Mes</label>
       <input type="text" id="mes" placeholder="MARZO 2026"/>
     </div>
-    <button class="btn-gen" onclick="generar()">⬇ Generar Proformas</button>
+    <button class="btn-gen" id="btn-gen" onclick="generar()">⬇ Generar Proformas</button>
     <button class="btn-tesoreria" onclick="generarReporteTesoreria()" title="Reporte para Tesorería: resumen por proveedor, tipo de proforma, rol y predio con totales de metros y montos para programar el pago">💰 Reporte Tesorería</button>
   </div>
 
@@ -1428,6 +1430,7 @@ function poblarControles() {
   document.getElementById('ctrl').classList.add('on');
   document.getElementById('btn-reset').classList.add('on');
   document.getElementById('dz').classList.add('loaded');
+  actualizarBotonGenerar();
 }
 
 // ── Generar ──
@@ -1487,12 +1490,39 @@ function generar() {
   });
   if (!filas.length) { status('No hay datos para los filtros seleccionados.', 'err'); return; }
 
+  // ══ RESTRICCIÓN: no se puede generar sin números asignados ══
+  // Sin esta validación, las filas sin N° se agrupaban bajo la clave vacía y
+  // se emitían proformas con números inválidos (0, 1, 2…).
+  const filasSinNumero = filas.filter(r => !str(r['PROFORMA']));
+  if (filasSinNumero.length) {
+    const gruposSin = new Set(filasSinNumero.map(r => [
+      str(r['PROVEEDOR']).trim(), str(r['DESTINO2']).trim(),
+      str(r['ROL ORIGEN']).trim(), str(r['TIPO PROFORMA']).trim()
+    ].join('||'))).size;
+
+    pfs = []; pfActual = null;
+    document.getElementById('pfsec').classList.remove('on');
+    document.getElementById('cards').classList.remove('on');
+    document.getElementById('pflist').innerHTML = '';
+
+    const hayExcluidos = document.getElementById('dup-box').classList.contains('on');
+    status('⛔ No se puede generar: hay ' + filasSinNumero.length + ' fila(s) sin N° de proforma (' +
+      gruposSin + ' proforma(s) sin numerar). Asigna los números con "↯ Asignar Números" antes de generar.' +
+      (hayExcluidos ? ' Si quedaron grupos excluidos por estar ya registrados, revisa el detalle en rojo y usa "Incluir igual" solo si corresponde.' : ''), 'err');
+
+    const numCard = document.getElementById('num-card');
+    if (numCard && numCard.classList.contains('on')) numCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+
   const grupos = {};
   filas.forEach(r => {
     const k = str(r['PROFORMA']);
+    if (!k) return;   // salvaguarda: nunca agrupar filas sin número
     if (!grupos[k]) grupos[k] = [];
     grupos[k].push(r);
   });
+  if (!Object.keys(grupos).length) { status('⛔ No hay proformas numeradas para generar.', 'err'); return; }
 
   // ── Pre-cálculo del Bono especial por Distancia POR ORIGEN ──
   // Recorre TODAS las filas crudas (no las filtradas) para acumular bono por
@@ -2458,7 +2488,21 @@ function recalcularGuiasExistentes() {
   return cambios;
 }
 
+// Bloquea "Generar Proformas" mientras existan filas sin N° asignado
+// (de los tipos seleccionados). Evita emitir proformas con números inválidos.
+function actualizarBotonGenerar() {
+  const btn = document.getElementById('btn-gen');
+  if (!btn) return;
+  const pendientes = rawRows.filter(r => filaTipoActivo(r) && !str(r['PROFORMA'])).length;
+  btn.disabled = pendientes > 0;
+  btn.title = pendientes > 0
+    ? 'Hay ' + pendientes + ' fila(s) sin N° de proforma. Asigna los números antes de generar.'
+    : '';
+  btn.textContent = pendientes > 0 ? '⛔ Asigna los números primero' : '⬇ Generar Proformas';
+}
+
 function actualizarPreview() {
+  actualizarBotonGenerar();
   const numInicial = parseInt(document.getElementById('num-inicial').value) || 30001;
   const todosGrupos = calcularGrupos(numInicial);
   renderDuplicados(todosGrupos);
