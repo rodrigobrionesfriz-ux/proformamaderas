@@ -1190,7 +1190,7 @@ function verProformaFB(num) {
 function imprimirProformaFB(num) {
   const pf = pfDesdeFB(num);
   if (!pf) return;
-  imprimir(renderPF(pf), 'Proforma_' + pf.num);
+  imprimir(renderPF(pf), tituloImpresionPF(pf));
 }
 
 /* ── Historial de Proformas ── */
@@ -1641,8 +1641,8 @@ function generar() {
   // Estructura:
   //   - Una proforma por proveedor con bonos (Distancia y/o CCE)
   //   - Una línea por (origen + tipo de bono):
-  //       · "Bono especial por Distancia - <PREDIO>"
-  //       · "Bono Acuerdo Comercial (CCE) - <PREDIO>"
+  //       · "Bono especial por Distancia - <PREDIO> (Rol <ROL ORIGEN>)"
+  //       · "Bono Acuerdo Comercial (CCE) - <PREDIO> (Rol <ROL ORIGEN>)"
   //   - Las filas de ajuste de precio (COSTO UNITARIO < 0) se restan como
   //     "Ajuste Precio - <PREDIO>" con neto negativo.
   //   - Número de proforma: max(PROFORMA del Excel y de pfs) + N
@@ -1690,12 +1690,21 @@ function generar() {
       const prov = str(r['PROVEEDOR']).trim();
       if (!prov) return;
       const cant = num_(r['CANTIDAD']);
-      const predio = str(r['PREDIO 2']) || str(r['ROL ORIGEN']) || '-';
+      const rolOri = str(r['ROL ORIGEN']);
+      const predio = str(r['PREDIO 2']) || rolOri || '-';
       const monto = cant * cu;   // negativo
       if (monto === 0) return;
       if (!bonoByProv[prov]) bonoByProv[prov] = { items: [], ajustes: [] };
-      bonoByProv[prov].ajustes.push({ predio, monto });
+      bonoByProv[prov].ajustes.push({ predio, rolOri, monto });
     });
+
+    // Glosa de las proformas complemento: predio + rol de origen asociado
+    // Ej.: "Bono especial por Distancia - SANTA INES (Rol 105-13)"
+    const glosaOrigen = (predio, rol) => {
+      const p = str(predio) || '-';
+      const r = str(rol);
+      return r && r !== p ? p + ' (Rol ' + r + ')' : p;
+    };
 
     // Calcular el próximo número de proforma (max existente + 1)
     let maxNum = 0;
@@ -1729,7 +1738,7 @@ function generar() {
           const bT = bN + bI;
           netoTot += bN; ivaTot += bI; totalTot += bT;
           lineas.push({
-            glosa: 'Bono especial por Distancia - ' + it.predio,
+            glosa: 'Bono especial por Distancia - ' + glosaOrigen(it.predio, it.rolOri),
             cu: it.precioUnitBono || 0,
             cant: it.metrosBonoD || 0,
             neto: bN, iva: bI, total: bT,
@@ -1748,7 +1757,7 @@ function generar() {
           netoTot += cN; ivaTot += cI; totalTot += cT;
           const precioUnitCce = it.metrosBonoC > 0 ? Math.round(it.sumCce / it.metrosBonoC) : 0;
           lineas.push({
-            glosa: 'Bono Acuerdo Comercial (CCE) - ' + it.predio,
+            glosa: 'Bono Acuerdo Comercial (CCE) - ' + glosaOrigen(it.predio, it.rolOri),
             cu: precioUnitCce,
             cant: it.metrosBonoC || 0,
             neto: cN, iva: cI, total: cT,
@@ -1763,7 +1772,7 @@ function generar() {
         const aT = aN + aI;                      // negativo
         netoTot += aN; ivaTot += aI; totalTot += aT;
         lineas.push({
-          glosa: 'Ajuste Precio - ' + a.predio,
+          glosa: 'Ajuste Precio - ' + glosaOrigen(a.predio, a.rolOri),
           cu: null, cant: null,
           neto: aN, iva: aI, total: aT,
           esBono: true,
@@ -2020,8 +2029,8 @@ function preview(num) {
   document.getElementById('ov').classList.add('open');
 }
 function cerrar() { document.getElementById('ov').classList.remove('open'); pfActual = null; }
-function impActual() { if (pfActual) imprimir(renderPF(pfActual), 'Proforma_' + pfActual.num); }
-function impUna(num) { const pf = pfs.find(p => p.num === num); if (pf) imprimir(renderPF(pf), 'Proforma_' + pf.num); }
+function impActual() { if (pfActual) imprimir(renderPF(pfActual), tituloImpresionPF(pfActual)); }
+function impUna(num) { const pf = pfs.find(p => p.num === num); if (pf) imprimir(renderPF(pf), tituloImpresionPF(pf)); }
 function impTodas() {
   if (!pfs.length) return;
   const html = pfs.map(pf => `<div style="page-break-after:always">${renderPF(pf)}</div>`).join('');
@@ -2738,9 +2747,18 @@ window.addEventListener('load', () => {
 });
 
 // ── Guardar PDF individual ──
+// Las proformas de bonos (soloBono) se identifican como COMPLEMENTO en el
+// nombre del archivo, para distinguirlas de la proforma de madera del mes.
+function esComplemento(pf) { return !!(pf && pf.soloBono); }
+
 function nombreArchivoPF(pf) {
-  const nombre = pf.num + ' – ' + pf.proveedor + ' – ' + pf.tipo;
+  const nombre = pf.num + ' – ' + pf.proveedor + ' – ' + pf.tipo + (esComplemento(pf) ? ' – COMPLEMENTO' : '');
   return nombre.replace(/[/\\?%*:|"<>]/g, '-') + '.pdf';
+}
+
+// Título del documento al imprimir (lo usa el navegador como nombre sugerido del PDF)
+function tituloImpresionPF(pf) {
+  return 'Proforma_' + pf.num + (esComplemento(pf) ? '_COMPLEMENTO' : '');
 }
 
 function generarPDFParaPF(pf) {
