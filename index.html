@@ -3,7 +3,17 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Generador de Proformas – La Cabaña Forestal (v22 Firebase)</title>
+<title>Generador de Proformas – La Cabaña Forestal</title>
+<!-- ═══ PWA ═══ -->
+<link rel="manifest" href="manifest.webmanifest"/>
+<meta name="theme-color" content="#2e4d35"/>
+<meta name="description" content="Generación, numeración correlativa y control de facturas de proformas de proveedores de madera."/>
+<link rel="icon" type="image/png" href="favicon.png"/>
+<link rel="apple-touch-icon" href="icon-192.png"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Proformas"/>
+<meta name="mobile-web-app-capable" content="yes"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -600,6 +610,19 @@ table.dt tfoot td:nth-child(7) { text-align: right; font-variant-numeric: tabula
 .dup-tbl .btn-forzar:hover { background:var(--gd); }
 .dup-tbl .btn-forzar.on { background:var(--gm); }
 .dup-guias { color:var(--mu); font-size:.72rem; }
+
+/* ═══ PWA: instalación, actualización y estado de conexión ═══ */
+.btn-instalar { display:none; align-items:center; gap:7px; padding:7px 18px; background:#fff; border:none; color:var(--gd); border-radius:7px; font-family:'Barlow',sans-serif; font-size:.8rem; font-weight:800; cursor:pointer; letter-spacing:.3px; white-space:nowrap; box-shadow:0 2px 8px rgba(0,0,0,.2); }
+.btn-instalar.on { display:inline-flex; }
+.btn-instalar:hover { background:#eef6ef; }
+.sw-bar { display:none; position:fixed; left:50%; transform:translateX(-50%); bottom:22px; z-index:400; background:var(--gd); color:#fff; border-radius:10px; padding:12px 18px; box-shadow:0 10px 34px rgba(0,0,0,.35); align-items:center; gap:14px; font-size:.85rem; font-weight:600; max-width:92vw; }
+.sw-bar.on { display:flex; }
+.sw-bar button { padding:6px 15px; border:none; border-radius:6px; background:var(--gold); color:#fff; font-family:'Barlow',sans-serif; font-size:.78rem; font-weight:800; cursor:pointer; white-space:nowrap; }
+.sw-bar button:hover { background:#9d8857; }
+.sw-bar .sw-x { background:transparent; color:#bcd6c2; font-size:1rem; padding:2px 6px; }
+.off-chip { display:none; font-size:.68rem; font-weight:800; letter-spacing:.4px; padding:5px 12px; border-radius:20px; background:#8a5a1f; color:#ffe6c7; border:1px solid rgba(255,255,255,.25); white-space:nowrap; }
+.off-chip.on { display:inline-block; }
+@media (display-mode: standalone) { .btn-dl-html { display:none; } }
 </style>
 </head>
 <body>
@@ -611,7 +634,9 @@ table.dt tfoot td:nth-child(7) { text-align: right; font-variant-numeric: tabula
     <p>Soc. Agrícola y Forestal La Cabaña Ltda.</p>
   </div>
   <div class="header-spacer"></div>
+  <span class="off-chip" id="off-chip" title="Sin conexión: la app sigue funcionando con los datos guardados">📴 Sin conexión</span>
   <span class="fb-chip" id="fb-chip" title="Estado de conexión con Firebase">⛔ Sin Firebase</span>
+  <button class="btn-instalar" id="btn-instalar" onclick="instalarApp()" title="Instalar la app en este equipo">⬇ Instalar app</button>
   <button class="btn-facturas" style="background:var(--gm)" onclick="abrirHistorial()">📋 Historial</button>
   <button class="btn-facturas" onclick="abrirFacturas()">🧾 Facturas <span class="fact-badge zero" id="fact-badge">0</span></button>
   <button class="btn-reset" id="btn-reset" onclick="limpiarDatos()">
@@ -627,7 +652,7 @@ table.dt tfoot td:nth-child(7) { text-align: right; font-variant-numeric: tabula
       <polyline points="7 10 12 15 17 10"/>
       <line x1="12" y1="15" x2="12" y2="3"/>
     </svg>
-    Descargar App
+    Descargar copia
   </button>
 </header>
 
@@ -774,6 +799,13 @@ table.dt tfoot td:nth-child(7) { text-align: right; font-variant-numeric: tabula
 </main>
 
 <!-- MODAL -->
+<!-- BARRA DE ACTUALIZACIÓN PWA -->
+<div class="sw-bar" id="sw-bar">
+  <span id="sw-bar-txt">✨ Hay una versión nueva de la app disponible.</span>
+  <button onclick="aplicarActualizacion()">Actualizar ahora</button>
+  <button class="sw-x" onclick="document.getElementById('sw-bar').classList.remove('on')">✕</button>
+</div>
+
 <!-- MODAL HISTORIAL DE PROFORMAS -->
 <div class="fact-ov" id="hist-ov" onclick="if(event.target===this)cerrarHistorial()">
   <div class="fact-modal" style="max-width:1100px">
@@ -855,6 +887,10 @@ function fbInit() {
     if (String(firebaseConfig.apiKey).indexOf('PEGA_AQUI') === 0) throw new Error('Configuración pendiente');
     firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
+    // Caché local: permite consultar proformas y facturas sin internet
+    db.enablePersistence({ synchronizeTabs: true }).catch(e => {
+      console.warn('Persistencia offline no disponible:', e && e.code);
+    });
     fbOK = true;
     chip.textContent = '☁ Firebase conectado';
     chip.classList.add('ok');
@@ -2601,6 +2637,105 @@ function descargarExcel() {
   XLSX.writeFile(wb, nombreBase + '_NUMERADO.xlsx');
   status('✓ Excel descargado con números de proforma y guías de despacho actualizados.', 'ok');
 }
+
+
+/* ═══════════════════════════════════════════
+   PWA — instalación, actualización y offline
+═══════════════════════════════════════════ */
+let promptInstalacion = null;
+let swRegistro = null;
+
+// ── Registro del Service Worker ──
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      swRegistro = reg;
+      // ¿Ya hay una versión nueva esperando?
+      if (reg.waiting && navigator.serviceWorker.controller) mostrarBarraActualizacion();
+      reg.addEventListener('updatefound', () => {
+        const nuevo = reg.installing;
+        if (!nuevo) return;
+        nuevo.addEventListener('statechange', () => {
+          if (nuevo.state === 'installed' && navigator.serviceWorker.controller) mostrarBarraActualizacion();
+        });
+      });
+      // Buscar actualizaciones cada vez que se vuelve a la app
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) reg.update().catch(() => {});
+      });
+    }).catch(e => console.warn('No se pudo registrar el Service Worker:', e));
+  });
+
+  let recargando = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (recargando) return;
+    recargando = true;
+    window.location.reload();
+  });
+}
+
+function mostrarBarraActualizacion() {
+  document.getElementById('sw-bar').classList.add('on');
+}
+
+function aplicarActualizacion() {
+  const bar = document.getElementById('sw-bar');
+  document.getElementById('sw-bar-txt').textContent = '⏳ Actualizando…';
+  if (swRegistro && swRegistro.waiting) {
+    swRegistro.waiting.postMessage('SKIP_WAITING');
+  } else {
+    window.location.reload();
+  }
+  setTimeout(() => bar.classList.remove('on'), 4000);
+}
+
+// ── Botón de instalación ──
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  promptInstalacion = e;
+  document.getElementById('btn-instalar').classList.add('on');
+});
+
+async function instalarApp() {
+  if (!promptInstalacion) {
+    alert('Para instalar la app:\n\n• Chrome / Edge (PC): menú ⋮ → "Instalar Generador de Proformas".\n• Android: menú ⋮ → "Instalar aplicación" o "Agregar a pantalla principal".\n• iPhone / iPad (Safari): botón Compartir → "Agregar a pantalla de inicio".');
+    return;
+  }
+  promptInstalacion.prompt();
+  const res = await promptInstalacion.userChoice;
+  promptInstalacion = null;
+  document.getElementById('btn-instalar').classList.remove('on');
+  if (res && res.outcome === 'accepted') status('✓ App instalada. Ahora puedes abrirla como programa, incluso sin internet.', 'ok');
+}
+
+window.addEventListener('appinstalled', () => {
+  promptInstalacion = null;
+  document.getElementById('btn-instalar').classList.remove('on');
+});
+
+// ── Estado de conexión ──
+function actualizarEstadoConexion() {
+  const chip = document.getElementById('off-chip');
+  if (!chip) return;
+  const off = !navigator.onLine;
+  chip.classList.toggle('on', off);
+  if (off) {
+    chip.title = 'Sin conexión: puedes generar e imprimir proformas. La numeración correlativa y el registro de facturas se sincronizan al recuperar internet.';
+  }
+}
+window.addEventListener('online',  () => { actualizarEstadoConexion(); if (fbOK) cargarEstadoFB(false); });
+window.addEventListener('offline', actualizarEstadoConexion);
+actualizarEstadoConexion();
+
+// ── Accesos directos del menú de la app (shortcuts del manifest) ──
+window.addEventListener('load', () => {
+  const vista = new URLSearchParams(location.search).get('vista');
+  if (!vista) return;
+  setTimeout(() => {
+    if (vista === 'facturas')  abrirFacturas(false);
+    if (vista === 'historial') abrirHistorial();
+  }, 1200);
+});
 
 // ── Guardar PDF individual ──
 function nombreArchivoPF(pf) {

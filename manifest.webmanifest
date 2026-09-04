@@ -1,0 +1,36 @@
+{
+  "id": "./",
+  "name": "Generador de Proformas – La Cabaña Forestal",
+  "short_name": "Proformas",
+  "description": "Generación, numeración correlativa y control de facturas de proformas de proveedores de madera.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ebebeb",
+  "theme_color": "#2e4d35",
+  "lang": "es-CL",
+  "dir": "ltr",
+  "categories": ["business", "productivity", "finance"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Control de facturas",
+      "short_name": "Facturas",
+      "description": "Registrar el N° de factura de cada proforma",
+      "url": "./?vista=facturas",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Historial de proformas",
+      "short_name": "Historial",
+      "description": "Revisar proformas emitidas con filtros",
+      "url": "./?vista=historial",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
