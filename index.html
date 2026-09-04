@@ -847,7 +847,8 @@ table.dt tfoot td:nth-child(7) { text-align: right; font-variant-numeric: tabula
     <div class="mbody" id="mbody"></div>
     <div class="mfoot">
       <button class="bcls" onclick="cerrar()">Cerrar</button>
-      <button class="bprt" onclick="impActual()">🖨 Imprimir / PDF</button>
+      <button class="bprt" onclick="guardarPDFActual()" style="background:#b03a2e" title="Descargar PDF con texto seleccionable">📄 Guardar PDF</button>
+      <button class="bprt" onclick="impActual()">🖨 Imprimir</button>
     </div>
   </div>
 </div>
@@ -1256,6 +1257,24 @@ function imprimirProformaFB(num) {
   imprimir(renderPF(pf), tituloImpresionPF(pf));
 }
 
+// Guarda el PDF (texto vectorial, seleccionable) de una proforma del historial
+async function guardarPDFFB(num) {
+  const pf = pfDesdeFB(num);
+  if (!pf) return;
+  const btn = document.getElementById('hpdf-' + num);
+  const orig = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳'; }
+  try {
+    const pdf = generarPDFParaPF(pf);
+    pdf.save(nombreArchivoPF(pf));
+  } catch (err) {
+    console.error(err);
+    alert('No se pudo generar el PDF de la proforma ' + num + ':\n' + err.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+  }
+}
+
 /* ── Historial de Proformas ── */
 function abrirHistorial() {
   if (!fbOK) { alert('Firebase no está configurado. El historial requiere conexión a la base de datos.'); return; }
@@ -1327,7 +1346,8 @@ function filtrarHistorial() {
       '<td>' + (pend ? '<span style="color:var(--red);font-weight:700">⚠ Pendiente</span>' : '<span class="fact-ok">✓ ' + p.factura + '</span>') + '</td>' +
       '<td style="white-space:nowrap">' + (p.lineas && p.lineas.length
         ? '<button class="btn-save" onclick="verProformaFB(' + p.num + ')">👁 Ver</button> ' +
-          '<button class="btn-save" style="background:var(--gd)" title="Imprimir / guardar PDF" onclick="imprimirProformaFB(' + p.num + ')">🖨</button>'
+          '<button class="btn-save" style="background:var(--gd)" title="Imprimir" onclick="imprimirProformaFB(' + p.num + ')">🖨</button> ' +
+          '<button class="btn-save" id="hpdf-' + p.num + '" style="background:#b03a2e" title="Guardar PDF (texto seleccionable)" onclick="guardarPDFFB(' + p.num + ')">📄 PDF</button>'
         : '<span style="color:var(--mu);font-size:.68rem" title="El detalle se guarda al generar las proformas con esta versión de la app">sin detalle</span>') + '</td>' +
       '</tr>';
   }).join('');
@@ -2121,6 +2141,16 @@ function preview(num) {
 }
 function cerrar() { document.getElementById('ov').classList.remove('open'); pfActual = null; }
 function impActual() { if (pfActual) imprimir(renderPF(pfActual), tituloImpresionPF(pfActual)); }
+// Guarda el PDF de la proforma abierta en el visor (sesión actual o historial)
+function guardarPDFActual() {
+  if (!pfActual) return;
+  try {
+    generarPDFParaPF(pfActual).save(nombreArchivoPF(pfActual));
+  } catch (err) {
+    console.error(err);
+    alert('No se pudo generar el PDF: ' + err.message);
+  }
+}
 function impUna(num) { const pf = pfs.find(p => p.num === num); if (pf) imprimir(renderPF(pf), tituloImpresionPF(pf)); }
 function impTodas() {
   if (!pfs.length) return;
