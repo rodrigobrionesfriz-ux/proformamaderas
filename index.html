@@ -1171,13 +1171,74 @@ function editarFactura(numPf) {
 }
 
 /* ── Ver / imprimir proforma original desde Firebase ── */
+/* ── Completar el rol en glosas de proformas antiguas ──
+   Las proformas complemento emitidas antes de la v23 guardaron la glosa sin
+   el rol de origen ("Bono especial por Distancia - SANTA INES"). Al verlas o
+   imprimirlas se completa con el rol correspondiente, deduciéndolo del predio.
+   Fuentes del mapa PREDIO → ROL: el Excel cargado y las proformas de Firebase.
+   Solo se completa cuando el predio tiene un único rol posible (sin ambigüedad). */
+function mapaPredioRol() {
+  const m = {};
+  const add = (predio, rol) => {
+    const p = normTxt(predio), r = str(rol).trim();
+    if (!p || !r || p === normTxt(r)) return;
+    if (!m[p]) m[p] = new Set();
+    m[p].add(r);
+  };
+  rawRows.forEach(r => add(r['PREDIO 2'], r['ROL ORIGEN']));
+  todasProformasFB.forEach(p => {
+    const preds = String(p.predio || '').split(',').map(x => x.trim()).filter(Boolean);
+    const roles = String(p.rol   || '').split(',').map(x => x.trim()).filter(Boolean);
+    if (preds.length && preds.length === roles.length) preds.forEach((pp, i) => add(pp, roles[i]));
+  });
+  const out = {};
+  Object.keys(m).forEach(k => { if (m[k].size === 1) out[k] = [...m[k]][0]; });   // sin ambigüedad
+  return out;
+}
+
+function completarRolEnGlosas(pf) {
+  if (!pf || !pf.lineas || !pf.lineas.length) return pf;
+  const mapa = mapaPredioRol();
+  let cambios = 0;
+  pf.lineas = pf.lineas.map(l => {
+    const g = str(l.glosa);
+    if (!l.esBono && !/^(Bono |Ajuste Precio)/i.test(g)) return l;   // solo líneas de complemento
+    if (/\(Rol\s/i.test(g)) return l;                                 // ya trae el rol
+    const i = g.lastIndexOf(' - ');
+    if (i < 0) return l;
+    const predio = g.slice(i + 3).trim();
+    const rol = mapa[normTxt(predio)];
+    if (!rol) return l;
+    cambios++;
+    return Object.assign({}, l, { glosa: g + ' (Rol ' + rol + ')' });
+  });
+  pf._rolCompletado = cambios;
+  return pf;
+}
+
+// Guarda la glosa corregida en Firebase (una sola vez por proforma)
+async function guardarGlosasCompletadas(pf) {
+  if (!fbOK || !pf || !pf._rolCompletado) return;
+  try {
+    await db.collection(FB_COL_PF).doc(String(pf.num)).set({ lineas: pf.lineas }, { merge: true });
+    const cache = todasProformasFB.find(x => Number(x.num) === Number(pf.num));
+    if (cache) cache.lineas = pf.lineas;
+    console.log('Glosas completadas con el rol en la proforma ' + pf.num + ' (' + pf._rolCompletado + ' línea/s).');
+  } catch (e) { console.warn('No se pudo guardar la glosa completada:', e); }
+}
+
 function pfDesdeFB(num) {
   const p = todasProformasFB.find(x => Number(x.num) === Number(num));
   if (!p || !p.lineas || !p.lineas.length) {
     alert('La proforma ' + num + ' no tiene el detalle guardado en Firebase.\nCarga el Excel de ese mes y genera las proformas una vez con esta versión para guardarlo.');
     return null;
   }
-  return Object.assign({}, p, { num: Number(p.num) });
+  const pf = completarRolEnGlosas(Object.assign({}, p, {
+    num: Number(p.num),
+    lineas: p.lineas.map(l => Object.assign({}, l))
+  }));
+  guardarGlosasCompletadas(pf);
+  return pf;
 }
 
 function verProformaFB(num) {
